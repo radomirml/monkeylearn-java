@@ -1,18 +1,11 @@
 package com.monkeylearn;
 
-import com.monkeylearn.RestClient;
-import com.monkeylearn.Tuple;
-import com.monkeylearn.MonkeyLearnException;
-
+import org.apache.http.Header;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 
-import org.apache.http.Header;
-
-import java.lang.Thread;
-
-import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SleepRequests {
 
@@ -45,7 +38,9 @@ public class SleepRequests {
                     client.Execute(RestClient.RequestMethod.PATCH);
                 }
             } catch (Exception e) {
-                // do something
+                MonkeyLearnException mle = new MonkeyLearnException(e.getMessage());
+                mle.initCause(e);
+                throw mle;
             }
 
             int code = client.getResponseCode();
@@ -55,6 +50,8 @@ public class SleepRequests {
             Object obj = JSONValue.parse(response);
             JSONObject jsonResponse = (JSONObject) obj;
 
+            if (jsonResponse == null)
+                throw new MonkeyLearnException("Not received JSON response. HTTP code received " + code);
 
             if (sleepIfThrottled && code == 429 && jsonResponse.get("detail").toString().contains("seconds")) {
                 Pattern pattern = Pattern.compile("available in (\\d+) seconds");
@@ -76,7 +73,12 @@ public class SleepRequests {
                 }
                 continue;
             } else if (code != 200) {
-                throw new MonkeyLearnException(jsonResponse.get("detail").toString());
+                Object detail = jsonResponse.get("detail");
+                if (detail != null)
+                    throw new MonkeyLearnException(detail.toString());
+                else
+                    throw new MonkeyLearnException(jsonResponse.toString());
+
             }
 
             return new Tuple<JSONObject, Header[]>(jsonResponse, headers);
